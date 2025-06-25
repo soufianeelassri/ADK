@@ -1,0 +1,6 @@
+google-cloud-discoveryengine
+mcp
+google-adk
+uvicorn
+starlette
+python-dotenv

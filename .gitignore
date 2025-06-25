@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pkl
+*.egg-info/
+
+# Environments
+.env
+.env.*
+.venv/
+venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Build
+build/
+dist/
+*.egg
+.eggs/
+
+# Test
+htmlcov/
+.coverage
+.tox/
+
+# Misc
+project_id.txt
+*.sqlite3
+*.db
+
+# Node (if any frontend)
+node_modules/
+
+# Ignore local config
+init.sh
+set_env.sh 
