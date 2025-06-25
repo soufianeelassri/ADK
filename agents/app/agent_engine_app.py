@@ -1,4 +1,5 @@
-# agents-service/agents/app/agent_engine_app.py
+# FILE: agents/app/agent_engine_app.py
+
 import os
 import logging
 import argparse
@@ -10,8 +11,11 @@ from google.adk.agents import Agent
 from google.api_core import exceptions
 from agents.app.utils import gcs
 from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
+
+# --- CORRECTED IMPORTS ---
+# Replace InMemorySessionService with a persistent one for production.
+from google.adk.sessions import DatabaseSessionService
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -27,11 +31,23 @@ class AgentApp(reasoning_engines.ReasoningEngine):
         self.remote_agent_addresses = None
         self._agent = agent
         self._runner: Runner | None = None
-        # NOTE: Using InMemorySessionService means sessions are NOT persistent across
-        # different server replicas or restarts in the Agent Engine environment.
-        # For production statefulness, a persistent SessionService (like DatabaseSessionService)
-        # pointing to a shared database (e.g., Cloud SQL) would be required.
-        self._session_service = InMemorySessionService()
+        
+        # --- CORRECTED for Production ---
+        # Using DatabaseSessionService is critical for production environments like
+        # Agent Engine where multiple server replicas run. InMemorySessionService
+        # would lose session state between requests handled by different replicas.
+        # The database connection URL is fetched from environment variables.
+        db_url = os.environ.get("DATABASE_URL")
+        if not db_url:
+            # For a production service, the database URL is non-negotiable.
+            raise ValueError(
+                "CRITICAL: DATABASE_URL environment variable is not set. "
+                "A persistent session service is required for production."
+            )
+            
+        logging.info(f"Initializing with persistent session storage: DatabaseSessionService")
+        self._session_service = DatabaseSessionService(db_url=db_url)
+        # --- END CORRECTION ---
 
     def set_up(self):
         """
@@ -66,11 +82,9 @@ class AgentApp(reasoning_engines.ReasoningEngine):
         
         logging.info(f"Received query: '{text}' for user_id: {user_id}, session_id: {session_id}")
 
-        # Use provided IDs or generate new ones for a new conversation
         user_id = user_id or str(uuid.uuid4())
         session_id = session_id or str(uuid.uuid4())
 
-        # Correctly get or create a session to maintain state
         session = await self._session_service.get_session(
             app_name=self._agent.name, user_id=user_id, session_id=session_id
         )
@@ -100,10 +114,10 @@ class AgentApp(reasoning_engines.ReasoningEngine):
         full_response = "".join(full_response_parts)
         logging.info(f"Agent '{self._agent.name}' generated full response.")
         
-        # Return session_id and user_id so the client can continue the conversation
         return {"response": full_response, "session_id": session.id, "user_id": user_id}
 
-# ... (the deploy_to_agent_engine function and __main__ block can remain the same) ...
+# ... the deploy_to_agent_engine function and __main__ block remain the same ...
+# They will now use the corrected AgentApp class.
 
 def deploy_to_agent_engine(
     project_id: str,

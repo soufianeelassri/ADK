@@ -1,4 +1,15 @@
+# FILE: agents/requirements.txt
+
+# --- Existing Dependencies ---
 google-cloud-aiplatform[reasoningengine,adk]
 google-adk
 python-dotenv
 google-cloud-storage
+
+# --- CORRECTED/ADDED Dependencies for Production Session Management ---
+# DatabaseSessionService is built on SQLAlchemy for ORM capabilities.
+SQLAlchemy
+
+# Database driver for PostgreSQL. This is required for DatabaseSessionService
+# to connect to a Cloud SQL PostgreSQL instance.
+psycopg2-binary
