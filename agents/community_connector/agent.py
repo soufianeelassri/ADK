@@ -1,20 +1,18 @@
 import os
-from google.adk.agents import Agent, LlmAgent
-from .http_mcp_tool import MCP_HTTP_TOOL
+from google.adk.agents import Agent
+from google.adk.tools import VertexAiSearchTool
 
-MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL")
-if not MCP_SERVER_URL:
-    raise ValueError("MCP_SERVER_URL environment variable is not set.")
+DATA_STORE_ID = os.environ.get("DATA_STORE_ID")
+if not DATA_STORE_ID:
+    raise ValueError("DATA_STORE_ID environment variable is not set.")
 
-async def get_agent() -> Agent:
-    """
-    Create and return the Community Connector agent (wrapped in Agent) with the custom HTTP-MCP tool.
-    """
-    llm = LlmAgent(
-        model="gemini-2.0-flash",
-        name="community_connector",
-        tools=[MCP_HTTP_TOOL],
-        instruction="""
+search_tool = VertexAiSearchTool(data_store_id=DATA_STORE_ID)
+
+root_agent = Agent(
+    model="gemini-2.0-flash",
+    name="community_connector",
+    tools=[search_tool],
+    instruction="""
 You are the "Community Connector" agent, a helpful and resourceful guide focused on connecting users with support networks, shared experiences, and relevant local resources during menopause.
 
 **Your Core Role:** To access and curate information from a RAG knowledge base/directories to find online communities, local support groups, curated content (stories, articles), and directories of relevant local professionals (doctors, specialists), and present these options to the user.
@@ -46,14 +44,5 @@ You are the "Community Connector" agent, a helpful and resourceful guide focused
 
 **Example Interaction Snippet (after Maestro intro):** "Hi [User Name], I'm your Community Connector! It's wonderful that you're looking to connect with others. Based on your interest in [mention symptom/topic, e.g., sleep issues] and your location [mention location if provided], here are some resources I've found..."
         """,
-    )
-
-    agent = Agent(
-        model=llm,
-        name="community_connector",
-        instruction=llm.instruction,
-        description="Connects users to menopause-related communities, stories, and directories.",
-        tools=[MCP_HTTP_TOOL],
-    )
-
-    return agent
+    description="Connects users to menopause-related communities, stories, and directories using a document search tool.",
+)

@@ -1,20 +1,18 @@
 import os
-from google.adk.agents import Agent, LlmAgent
-from .http_mcp_tool import MCP_HTTP_TOOL
+from google.adk.agents import Agent
+from google.adk.tools import VertexAiSearchTool
 
-MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL")
-if not MCP_SERVER_URL:
-    raise ValueError("MCP_SERVER_URL environment variable is not set.")
+DATA_STORE_ID = os.environ.get("DATA_STORE_ID")
+if not DATA_STORE_ID:
+    raise ValueError("DATA_STORE_ID environment variable is not set.")
 
-async def get_agent() -> Agent:
-    """
-    Create and return the Nutrition Expert agent (wrapped in Agent) with the custom HTTP-MCP tool.
-    """
-    llm = LlmAgent(
-        model="gemini-2.0-flash",
-        name="nutrition_expert",
-        tools=[MCP_HTTP_TOOL],
-        instruction="""
+search_tool = VertexAiSearchTool(data_store_id=DATA_STORE_ID)
+
+root_agent = Agent(
+    model="gemini-2.0-flash",
+    name="nutrition_expert",
+    tools=[search_tool],
+    instruction="""
 You are the "Nutrition Expert" agent, a knowledgeable and practical guide focused on helping users manage menopause symptoms through evidence-based dietary and nutritional approaches.
 
 **Your Core Role:** To provide personalized, actionable advice on food consumption, supplements (when appropriate and with caveats), and eating habits based on the user's specific symptoms, reported diet, and your extensive RAG knowledge base.
@@ -47,14 +45,5 @@ You are the "Nutrition Expert" agent, a knowledgeable and practical guide focuse
 
 **Example Interaction Snippet (after Maestro intro):** "Hi [User Name], I'm your Nutrition Expert, ready to explore how food choices might help you feel better. Based on what you shared about [symptom, e.g., hot flashes] and your diet, let's look at..."
         """,
-    )
-
-    agent = Agent(
-        model=llm,
-        name="nutrition_expert",
-        instruction=llm.instruction,
-        description="Provides evidence-based nutrition guidance for menopause-related symptoms.",
-        tools=[MCP_HTTP_TOOL],
-    )
-
-    return agent
+    description="Provides evidence-based nutrition guidance for menopause-related symptoms using a document search tool.",
+)

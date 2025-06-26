@@ -1,103 +1,13 @@
-# agents-service/agents/maestro/agent.py
-import os
-import uuid
-import httpx
-from typing import Dict, Any
-
-from dotenv import load_dotenv
 from google.adk.agents import Agent
-from google.adk.tools import FunctionTool, ToolContext
+from google.adk.tools import agent_tool
 
-load_dotenv()
+from agents.nutrition_expert.agent import root_agent as nutrition_agent
+from agents.life_coach.agent import root_agent as life_coach_agent
+from agents.community_connector.agent import root_agent as community_connector_agent
 
-# --- Configuration for Remote Specialist Agents ---
-REMOTE_AGENT_ADDRESSES_STR = os.getenv("REMOTE_AGENT_ADDRESSES", "")
-REMOTE_AGENT_ADDRESSES = [
-    addr.strip().rstrip("/")
-    for addr in REMOTE_AGENT_ADDRESSES_STR.split(",")
-    if addr.strip()
-]
-
-if not REMOTE_AGENT_ADDRESSES:
-    raise ValueError("Maestro agent cannot be built: REMOTE_AGENT_ADDRESSES environment variable is not set.")
-
-print(f"Maestro: Configuring {len(REMOTE_AGENT_ADDRESSES)} remote agent addresses as tools.")
-
-def make_remote_agent_tool(agent_name: str, agent_url: str, agent_description: str) -> FunctionTool:
-    """
-    Creates a FunctionTool that calls a remote ADK agent's standard /run endpoint.
-    """
-    async def call_remote_agent(query: str, tool_context: ToolContext) -> Dict[str, Any]:
-        """
-        Dynamically created tool to delegate tasks to a remote specialist agent.
-        This docstring will be used by the Maestro agent's LLM.
-        """
-        print(f"Maestro -> Calling remote agent '{agent_name}' at {agent_url} with query: '{query}'")
-
-        # Reuse session details from the Maestro's context
-        user_id = tool_context.invocation_context.user_id
-        # Use a unique session ID for the sub-task to keep it isolated if needed,
-        # or reuse the Maestro's session ID for shared context. For simplicity, we create a new one.
-        sub_session_id = str(uuid.uuid4())
-
-        payload = {
-            "app_name": agent_name,
-            "user_id": user_id,
-            "session_id": sub_session_id,
-            "new_message": {"role": "user", "parts": [{"text": query}]},
-            "streaming": False,
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                response = await client.post(f"{agent_url}/run", json=payload)
-                response.raise_for_status()
-                events = response.json()
-
-                # Extract and combine text from final response events
-                final_response_text = " ".join(
-                    part.get("text", "")
-                    for event in events if event.get("is_final_response")
-                    for part in event.get("content", {}).get("parts", [])
-                )
-
-                if not final_response_text:
-                    return {"status": "error", "message": "Remote agent did not return a final text response."}
-
-                return {"status": "success", "response": final_response_text}
-
-        except httpx.HTTPStatusError as e:
-            err_msg = f"HTTP error calling '{agent_name}': {e.response.status_code} - {e.response.text}"
-            print(err_msg)
-            return {"status": "error", "message": err_msg}
-        except Exception as e:
-            err_msg = f"An unexpected error occurred when calling '{agent_name}': {e}"
-            print(err_msg)
-            return {"status": "error", "message": err_msg}
-
-    # Create the FunctionTool with a clear name and the dynamically generated description
-    return FunctionTool(func=call_remote_agent, name=agent_name, description=agent_description)
-
-
-# --- Create Specialist Tools from Environment URLs ---
-# In a real scenario, you'd fetch agent cards to get names/descriptions dynamically.
-# For this corrected example, we'll hardcode them based on the provided architecture.
-specialist_agent_info = {
-    "nutrition-expert-service": "Provides personalized, evidence-based dietary advice for menopause symptoms.",
-    "life-coach-service": "Provides empathetic support and life coaching guidance for emotional challenges during menopause.",
-    "community-connector-service": "Connects users to menopause-related communities, stories, and directories.",
-}
-
-specialist_tools = []
-for url in REMOTE_AGENT_ADDRESSES:
-    # Infer agent name from the URL or a naming convention
-    # This part might need to be more robust in production
-    agent_name_from_url = url.split("/")[-1].split(".")[0] # Basic inference
-    if agent_name_from_url in specialist_agent_info:
-        description = specialist_agent_info[agent_name_from_url]
-        tool = make_remote_agent_tool(agent_name_from_url, url, description)
-        specialist_tools.append(tool)
-        print(f"Maestro: Created tool '{tool.name}' for specialist agent at {url}")
+nutrition_tool = agent_tool.AgentTool(agent=nutrition_agent)
+life_coach_tool = agent_tool.AgentTool(agent=life_coach_agent)
+community_connector_tool = agent_tool.AgentTool(agent=community_connector_agent)
 
 instruction = """
 You are the "Maestro" agent, the empathetic and intelligent front door to a Multimodal Menopause Wellness system.
@@ -138,7 +48,11 @@ root_agent = Agent(
     name="maestro_agent",
     instruction=instruction,
     description="The central orchestrator for the Menopause Wellness Assistant.",
-    tools=specialist_tools,
+    tools=[
+        nutrition_tool,
+        life_coach_tool,
+        community_connector_tool,
+    ],
 )
 
-print(f"Maestro root agent '{root_agent.name}' has been created with {len(root_agent.tools)} specialist tools.")
+print(f"Maestro root agent '{root_agent.name}' has been created with specialist agent tools.")
